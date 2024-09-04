@@ -115,7 +115,7 @@ namespace CfPerfCalc.Services
             var ratingDict = await GetRatedListAsync();
             var handlesQuery = string.Join(';', handles);
             handlesQuery = Uri.EscapeDataString(handlesQuery);
-            var url = $"https://codeforces.com/api/user.info?handles={handlesQuery}&checkHistoricHandles=false";
+            var url = $"https://codeforces.com/api/user.info?handles={handlesQuery}&checkHistoricHandles=true";
             var response = await httpClient.GetFromJsonAsync<RatedList>(url);
             if (response?.status == "OK" && response.result != null)
             {
