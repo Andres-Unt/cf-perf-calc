@@ -1,4 +1,4 @@
-This is a performance rating calculator for codeforces contests.
+This is a [performance rating calculator](https://andres-unt.github.io/cf-perf-calc/) for codeforces contests.
 
 The general idea is:
 
