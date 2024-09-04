@@ -1,0 +1,29 @@
+@page "/ratedlist"
+@using CfPerfCalc.Services
+@inject CfPerfCalc.Services.CfApiClient CfApiClient
+
+<h3>Rated Users</h3>
+
+@if (ratedList == null)
+{
+    <p>Loading...</p>
+}
+else
+{
+    <ol>
+        @foreach (var (handle,rating) in ratedList)
+        {
+            <li>@handle: @rating</li>
+        }
+    </ol>
+}
+
+@code {
+    private List<(string,int)> ratedList;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var dict = await CfApiClient.GetRatedListAsync();
+        ratedList = dict.OrderByDescending(kvp => kvp.Value).Select(kvp => (kvp.Key, kvp.Value)).ToList();
+    }
+}
