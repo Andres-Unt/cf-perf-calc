@@ -110,18 +110,35 @@ namespace CfPerfCalc.Services
             return standings;
         }
 
-        public async Task EnsureRatings(List<string> handles)
+        public async Task EnsureRatings(IList<string> handles)
         {
+            string? singleHandle = handles.Count == 1 ? handles[0] : null;
             var ratingDict = await GetRatedListAsync();
             var handlesQuery = string.Join(';', handles);
             handlesQuery = Uri.EscapeDataString(handlesQuery);
             var url = $"https://codeforces.com/api/user.info?handles={handlesQuery}&checkHistoricHandles=true";
             var response = await httpClient.GetFromJsonAsync<RatedList>(url);
+            List<string> stillMissing = [];
             if (response?.status == "OK" && response.result != null)
             {
+                var nowGot = new HashSet<string>();
                 foreach (var user in response.result)
                 {
                     ratingDict[user.handle] = user.rating;
+                    nowGot.Add(user.handle);
+                    if (singleHandle != null)
+                    {
+                        ratingDict[singleHandle] = user.rating;
+                        nowGot.Add(singleHandle);
+                    }
+                }
+
+                foreach (var user in handles)
+                {
+                    if (!nowGot.Contains(user))
+                    {
+                        stillMissing.Add(user);
+                    }
                 }
 
                 await ratingCache.Update(ratingDict);
@@ -129,6 +146,11 @@ namespace CfPerfCalc.Services
             else
             {
                 throw new HttpRequestException($"Failed to fetch ratings for handles: {handlesQuery}");
+            }
+
+            foreach (var single in stillMissing)
+            {
+                await EnsureRatings([single]);
             }
         }
     }
