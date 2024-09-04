@@ -11,6 +11,8 @@ builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(builder.
 builder.Services.AddScoped<CfApiClient>();
 builder.Services.AddScoped<JSInterop>();
 builder.Services.AddScoped<RatingCache>();
+builder.Services.AddScoped<PerfCache>();
+builder.Services.AddScoped<UserHandleCache>();
 
 
 await builder.Build().RunAsync();

@@ -1,12 +1,19 @@
-﻿@inherits LayoutComponentBase
+﻿@using CfPerfCalc.Services
+@inherits LayoutComponentBase
+
+@inject UserHandleCache userHandleCache
+
 <div class="page">
     <div class="sidebar">
-        <NavMenu/>
+        <NavMenu />
     </div>
 
     <main>
         <div class="top-row px-4">
-            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
+            <label>
+                Your CF handle:
+                <input type="text" value="@_userHandle" @onchange="HandleChanged"/>
+            </label>
         </div>
 
         <article class="content px-4">
@@ -14,3 +21,18 @@
         </article>
     </main>
 </div>
+
+@code {
+    private string? _userHandle;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _userHandle = await userHandleCache.GetUserHandle();
+    }
+
+    private async Task HandleChanged(ChangeEventArgs arg)
+    {
+        _userHandle = arg.Value?.ToString();
+        await userHandleCache.SetUserHandleAsync(_userHandle);
+    }
+}

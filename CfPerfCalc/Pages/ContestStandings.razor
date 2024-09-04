@@ -1,28 +1,31 @@
 @page "/contest-standings"
+@using System.Diagnostics
 @using CfPerfCalc.Services
-@inject CfPerfCalc.Services.CfApiClient CfApiClient
+@inject CfApiClient cfApiClient
+@inject PerfCache perfCache
+@layout MainLayout
+@inherits LayoutComponentBase
+@inject  UserHandleCache userHandleCache;
+@inject  NavigationManager navigationManager;
 
 <h3>Contest Standings</h3>
 
 <div>
     <label for="contestId">Enter Contest ID:</label>
-    <input type="number" @bind="contestId" @bind:event="oninput" @onchange="LoadStandings"/>
+    <input type="number" value="@contestId" @onchange="async args => { contestId = ParseInt(args); await LoadStandings(); }"/>
 </div>
 
+@if (status != null)
+{
+    <p>Status: @status</p>
+}
 @if (error != null)
 {
     <p class="text-danger">@error</p>
 }
 else if (loadingStandings)
 {
-    @if (missingRatings > 0)
-    {
-        <p>Missing ratings for @missingRatings contestants...</p>
-    }
-    else
-    {
-        <p>Loading standings...</p>
-    }
+    <p>Loading standings...</p>
 }
 else if (!standingsLoaded)
 {
@@ -30,27 +33,48 @@ else if (!standingsLoaded)
 }
 else if (standingsLoaded)
 {
+    @if (missingRatings > 0)
+    {
+        <p>Missing ratings for @missingRatings contestants...</p>
+    }
+
+    @if (missingPerfs > 0)
+    {
+        <p>Missing perf calculation for @missingPerfs contestants...</p>
+    }
+
+    @if (userHandle != null)
+    {
+        <p>Your performance: @userPerformanceText 
+            @if (userPerformanceRating != null)
+            {
+                <button type="button" onclick="document.getElementById('@userHandle').scrollIntoView({behavior:'smooth', block:'center'})"> Scroll to me</button>
+            }
+        </p>
+    }
     <table class="table">
         <thead>
         <tr>
             <th>Rank</th>
-            <th>Type</th>
+            <th>Performance</th>
             <th>Handle</th>
-            <th>Rating</th>
+            <th>Type</th>
             <th>Points</th>
             <th>Penalty</th>
+            <th>Rating</th>
         </tr>
         </thead>
         <tbody>
         @foreach (var entry in standings)
         {
-            <tr>
+            <tr id="@(entry.handle)" class="@(entry.handle == userHandle ? "my_result" : "somebody_else")">
                 <td>@entry.rank</td>
-                <td>@entry.type</td>
+                <td>@perfCache.GetPerf(contestId!.Value, entry.handle)</td>
                 <td>@entry.handle</td>
-                <td>@(ratings.TryGetValue(entry.handle, out var rating) ? rating.ToString() : "?")</td>
+                <td>@entry.type</td>
                 <td>@entry.points</td>
                 <td>@entry.penalty</td>
+                <td>@(ratings.TryGetValue(entry.handle, out var rating) ? rating.ToString() : "?")</td>
             </tr>
         }
         </tbody>
@@ -65,18 +89,29 @@ else if (standingsLoaded)
     private int missingRatings = 0;
     private bool loadingStandings = false;
     private bool standingsLoaded = false;
+    private int missingPerfs = 0;
+    private string userPerformanceText = "?";
+    private int? userPerformanceRating = null;
+    private string? userHandle = null;
+    private string? status = null;
+
+    private void SetStatus(string? msg)
+    {
+        status = msg;
+        StateHasChanged();
+    }
 
     private async Task LoadStandings()
     {
         try
         {
+            missingPerfs = 0;
             standingsLoaded = false;
             loadingStandings = true;
             StateHasChanged();
-            error = null; // Reset error
-            standings = null;
-            standings = await CfApiClient.GetContestStandingsAsync(contestId!.Value);
-            ratings = await CfApiClient.GetRatedListAsync();
+            error = null;
+            await GetStandingsWithoutVirtuals();
+            ratings = await cfApiClient.GetRatedListAsync();
             missingRatings = 0;
             var mustFindRatingsFor = new HashSet<string>();
             foreach (var entry in standings)
@@ -88,12 +123,14 @@ else if (standingsLoaded)
                 }
             }
 
+            loadingStandings = false;
+            standingsLoaded = true;
             StateHasChanged();
             while (missingRatings > 0)
             {
                 var shouldFind = mustFindRatingsFor.Take(500).ToList();
-                await CfApiClient.EnsureRatings(shouldFind);
-                ratings = await CfApiClient.GetRatedListAsync();
+                await cfApiClient.EnsureRatings(shouldFind);
+                ratings = await cfApiClient.GetRatedListAsync();
                 foreach (var item in shouldFind)
                 {
                     if (ratings.ContainsKey(item))
@@ -107,14 +144,117 @@ else if (standingsLoaded)
                 {
                     await Task.Delay(2100); //api rate limit
                 }
+
                 StateHasChanged();
             }
-            loadingStandings = false;
-            standingsLoaded = true;
+
+            var mustFindPerfsFor = standings.Select(entry => entry.handle).Reverse().ToList();
+            missingPerfs = mustFindPerfsFor.Count;
+            StateHasChanged();
+            await GetUserPerformance();
+            StateHasChanged();
+            while (missingPerfs > 0)
+            {
+                var lastHandle = mustFindPerfsFor.Last();
+                await perfCache.EnsurePerf(contestId.Value, lastHandle, standings, ratings);
+                var perf = perfCache.GetPerf(contestId.Value, lastHandle);
+                if (perf != null)
+                {
+                    mustFindPerfsFor.RemoveAt(mustFindPerfsFor.Count - 1);
+                    missingPerfs--;
+                }
+
+                if (missingPerfs % 20 == 0)
+                {
+                    StateHasChanged();
+                }
+            }
         }
         catch (Exception ex)
         {
             error = $"Error: {ex.Message}";
         }
     }
+
+    private async Task GetStandingsWithoutVirtuals()
+    {
+        var watch = new Stopwatch();
+        watch.Start();
+        SetStatus("getting standings");
+        standings = null;
+        standings = await cfApiClient.GetContestStandingsAsync(contestId!.Value);
+        SetStatus("filtering standings");
+        standings = await FilterStandings(standings);
+        SetStatus("getting user handle");
+        userHandle ??= await userHandleCache.GetUserHandle();
+        SetStatus("filtering standings again");
+        var shorterStandings = standings.Where(entry => entry.type != "VIRTUAL" || entry.handle == userHandle).OrderBy(entry => entry.rank).Select(entry => new Entry { handle = entry.handle, rank = entry.rank, points = entry.points, type = entry.type, penalty = entry.penalty }).ToList();
+        var l = 0;
+        while (l < shorterStandings.Count)
+        {
+            var thisGroupRank = shorterStandings[l].rank;
+            var r = l + 1;
+            while (r < shorterStandings.Count && Math.Abs(shorterStandings[r].rank - thisGroupRank) < 0.1)
+            {
+                ++r;
+            }
+
+            var averageRank = (l + 1 + r) / 2.0;
+            for (var i = l; i < r; ++i)
+            {
+                shorterStandings[i].rank = averageRank;
+            }
+
+            l = r;
+        }
+
+        standings = shorterStandings;
+        SetStatus(null);
+        var elapsed = watch.Elapsed;
+        // SetStatus(elapsed.ToString());
+    }
+
+    private async Task<List<Entry>> FilterStandings(List<Entry> entries)
+    {
+        var userHandle = await userHandleCache.GetUserHandle();
+        return entries.Where(entry => entry.type != "VIRTUAL" || entry.handle == userHandle).ToList();
+    }
+
+    private int? ParseInt(ChangeEventArgs args)
+    {
+        if (args.Value == null)
+        {
+            return null;
+        }
+
+        return int.Parse(args.Value.ToString()!);
+    }
+
+    private async Task GetUserPerformance()
+    {
+        userHandle ??= await userHandleCache.GetUserHandle();
+        if (userHandle is null)
+        {
+            userPerformanceText = "who are you? set handle";
+            return;
+        }
+
+        if (standingsLoaded && standings.All(entry => entry.handle != userHandle))
+        {
+            userPerformanceText = "bad or didn't participate";
+            return;
+        }
+
+        await perfCache.EnsurePerf(contestId!.Value, userHandle, standings, ratings);
+
+        userPerformanceRating = perfCache.GetPerf(contestId.Value, userHandle);
+        if (userPerformanceRating != null)
+        {
+            userPerformanceText = userPerformanceRating.Value.ToString();
+            return;
+        }
+
+        userPerformanceText = "not sure, something went wrong";
+    }
+
 }

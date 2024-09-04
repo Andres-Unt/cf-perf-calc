@@ -6,7 +6,7 @@ public class Entry
     public string type { get; set; }
     public double points { get; set; }
     public int penalty { get; set; }
-    public int rank { get; set; }
+    public double rank { get; set; }
 
     public Entry()
     {

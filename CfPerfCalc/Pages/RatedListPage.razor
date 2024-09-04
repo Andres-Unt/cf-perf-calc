@@ -2,7 +2,17 @@
 @using CfPerfCalc.Services
 @inject CfPerfCalc.Services.CfApiClient CfApiClient
 
-<h3>Rated Users</h3>
+<h3>User ratings cache</h3>
+This only shows users from two sources:
+<ul>
+    <li>
+        CF api returns a random subset of users (it seems to be broken at the time of writing).
+        Out of those, we keep the ones with rating >= 1600 (for perf reasons, there are too many cyans and below).
+    </li>
+    <li>
+        When contest standings are loaded, top performers get queried and added to cache.
+    </li>
+</ul>
 
 @if (ratedList == null)
 {

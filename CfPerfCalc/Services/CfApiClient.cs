@@ -1,7 +1,9 @@
+using System.Diagnostics;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Timer = System.Timers.Timer;
 
 namespace CfPerfCalc.Services
 {
@@ -40,8 +42,11 @@ namespace CfPerfCalc.Services
                 var cacheDate = DateTime.Parse(cachedTimestamp);
                 if (cacheDate > DateTime.Now.AddDays(-7))
                 {
+                    var watch = new Stopwatch();
+                    watch.Start();
                     var cachedStandings = JsonSerializer.Deserialize<List<Entry>>(cachedData);
                     _cachedStandings[contestId] = cachedStandings;
+                    var elapsed = watch.Elapsed;
                     return cachedStandings;
                 }
             }
