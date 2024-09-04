@@ -48,7 +48,7 @@ else if (standingsLoaded)
         <p>Your performance: @userPerformanceText 
             @if (userPerformanceRating != null)
             {
-                <button type="button" onclick="document.getElementById('@userHandle').scrollIntoView({behavior:'smooth', block:'center'})"> Scroll to me</button>
+                <button class="m-2" type="button" onclick="document.getElementById('@userHandle').scrollIntoView({behavior:'smooth', block:'center'})"> Scroll to me</button>
             }
         </p>
     }
@@ -232,6 +232,7 @@ else if (standingsLoaded)
 
     private async Task GetUserPerformance()
     {
+        userPerformanceRating = null;
         userHandle ??= await userHandleCache.GetUserHandle();
         if (userHandle is null)
         {
