@@ -112,6 +112,27 @@ namespace CfPerfCalc.Services
 
         public async Task EnsureRatings(IList<string> handles)
         {
+            const int batchSize = 500;
+            var curBatch = new List<string>();
+            foreach (var handle in handles)
+            {
+                curBatch.Add(handle);
+                if (curBatch.Count == batchSize)
+                {
+                    await EnsureRatingsInBatch(curBatch);
+                    curBatch.Clear();
+                }
+            }
+
+            if (curBatch.Count > 0)
+            {
+                await EnsureRatingsInBatch(curBatch);
+                curBatch.Clear();
+            }
+        }
+        private async Task EnsureRatingsInBatch(IList<string> handles)
+        {
+            
             string? singleHandle = handles.Count == 1 ? handles[0] : null;
             var ratingDict = await GetRatedListAsync();
             var handlesQuery = string.Join(';', handles);
@@ -151,6 +172,28 @@ namespace CfPerfCalc.Services
             foreach (var single in stillMissing)
             {
                 await EnsureRatings([single]);
+            }
+        }
+
+        public static void FixRanksInStandings(List<Entry> standings)
+        {
+            var l = 0;
+            while (l < standings.Count)
+            {
+                var thisGroupRank = standings[l].rank;
+                var r = l + 1;
+                while (r < standings.Count && Math.Abs(standings[r].rank - thisGroupRank) < 0.1)
+                {
+                    ++r;
+                }
+
+                var averageRank = (l + 1 + r) / 2.0;
+                for (var i = l; i < r; ++i)
+                {
+                    standings[i].rank = averageRank;
+                }
+
+                l = r;
             }
         }
     }

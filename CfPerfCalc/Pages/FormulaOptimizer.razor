@@ -1,0 +1,69 @@
+@page "/formula-optimizer"
+@using CfPerfCalc.Services.FormulaOptimizer
+
+<h3>Formula Optimizer</h3>
+
+<p>
+    Usually, the Codeforces rating formula claims that win probability decreases
+    10 times for every 400 rating point difference. This optimizer aims to check if this 10 is
+    indeed the best constant. We will try a bunch of different values and see which produces the
+    smallest square error compared to real rating changes.
+</p>
+
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th></th>
+            @foreach (var contestId in _contestIds)
+            {
+                <th>@contestId</th>
+            }
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var elitismValue in _elitismValues)
+        {
+            <tr>
+                <td>@elitismValue</td>
+                @foreach (var contestId in _contestIds)
+                {
+                    <td>
+                        @if (_results.ContainsKey((contestId, elitismValue)))
+                        {
+                            @_results[(contestId, elitismValue)].SquareError
+                        }
+                        else
+                        {
+                            <em>?</em>
+                        }
+                    </td>
+                }
+            </tr>
+        }
+    </tbody>
+</table>
+
+@code {
+    // Inject the optimization service
+    [Inject] private FormulaOptimizationService OptimizationService { get; set; }
+
+    List<int> _contestIds = [1991,2002, 2006, 1994, 1987, 1893, 1787, 1770, 1774, 1696];
+    List<double> _elitismValues = [17,17.25,17.5,17.75,18,18.25,18.5,18.75,19];
+
+    // Dictionary to hold the results for each contest ID and elitism value
+    private Dictionary<(int contestId, double elitismValue), OptimizationResult> _results = new();
+
+    // Start optimization on page load
+    protected override async Task OnInitializedAsync()
+    {
+        foreach (var contestId in _contestIds)
+        {
+            foreach (var elitismValue in _elitismValues)
+            {
+                var result = await OptimizationService.CalculateForContest(contestId, elitismValue);
+                _results[(contestId, elitismValue)] = result;
+                StateHasChanged(); // Trigger UI update as results come in
+            }
+        }
+    }
+}

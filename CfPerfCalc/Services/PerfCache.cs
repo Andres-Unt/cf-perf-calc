@@ -38,7 +38,7 @@ namespace CfPerfCalc.Services
 
             if (!_cache[contestId].ContainsKey(handle))
             {
-                _cache[contestId][handle] = await CalculatePerformance(handle, standings, ratings);
+                _cache[contestId][handle] = CalculatePerformance(handle, standings, ratings, 20.0);
                 mustSave = true;
             }
 
@@ -48,7 +48,7 @@ namespace CfPerfCalc.Services
             }
         }
 
-        private async Task<int> CalculatePerformance(string handle, List<Entry> standings, Dictionary<string, int> ratings)
+        public static int CalculatePerformance(string handle, List<Entry> standings, Dictionary<string, int> ratings, double elitism)
         {
             int lo = 0, hi = 5000, mid;
             double? rank = null;
@@ -71,7 +71,7 @@ namespace CfPerfCalc.Services
                 double left = 0;
                 foreach (var entry in standings)
                 {
-                    left += 1.0 / (1 + Math.Pow(10, (mid - ratings[entry.handle]) / 400.0 ));
+                    left += 1.0 / (1 + Math.Pow(elitism, (mid - ratings[entry.handle]) / 400.0 ));
                 }
                 double right = rank.Value - 0.5;
                 if (left > right)
@@ -83,10 +83,6 @@ namespace CfPerfCalc.Services
                     hi = mid-1;
                 }
             }
-
-            //This is to give the UI time to render something on the screen too.
-            //Shouldn't actually affect the time much, 5ms isn't the majority.
-            await Task.Delay(5);
             return lo;
         }
 

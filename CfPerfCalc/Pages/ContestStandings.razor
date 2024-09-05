@@ -105,6 +105,7 @@ else if (standingsLoaded)
     {
         try
         {
+            userPerformanceRating = null;
             missingPerfs = 0;
             standingsLoaded = false;
             loadingStandings = true;
@@ -157,6 +158,7 @@ else if (standingsLoaded)
             {
                 var lastHandle = mustFindPerfsFor.Last();
                 await perfCache.EnsurePerf(contestId.Value, lastHandle, standings, ratings);
+                await Task.Delay(5);
                 var perf = perfCache.GetPerf(contestId.Value, lastHandle);
                 if (perf != null)
                 {
@@ -188,27 +190,8 @@ else if (standingsLoaded)
         SetStatus("getting user handle");
         userHandle ??= await userHandleCache.GetUserHandle();
         SetStatus("filtering standings again");
-        var shorterStandings = standings.Where(entry => entry.type != "VIRTUAL" || entry.handle == userHandle).OrderBy(entry => entry.rank).Select(entry => new Entry { handle = entry.handle, rank = entry.rank, points = entry.points, type = entry.type, penalty = entry.penalty }).ToList();
-        var l = 0;
-        while (l < shorterStandings.Count)
-        {
-            var thisGroupRank = shorterStandings[l].rank;
-            var r = l + 1;
-            while (r < shorterStandings.Count && Math.Abs(shorterStandings[r].rank - thisGroupRank) < 0.1)
-            {
-                ++r;
-            }
-
-            var averageRank = (l + 1 + r) / 2.0;
-            for (var i = l; i < r; ++i)
-            {
-                shorterStandings[i].rank = averageRank;
-            }
-
-            l = r;
-        }
-
-        standings = shorterStandings;
+        standings = standings.Where(entry => entry.type != "VIRTUAL" || entry.handle == userHandle).OrderBy(entry => entry.rank).Select(entry => new Entry { handle = entry.handle, rank = entry.rank, points = entry.points, type = entry.type, penalty = entry.penalty }).ToList();
+        CfApiClient.FixRanksInStandings(standings);
         SetStatus(null);
         var elapsed = watch.Elapsed;
         // SetStatus(elapsed.ToString());
